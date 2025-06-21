@@ -13,8 +13,6 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///coffee_machine.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-db = get_db_session()
-
 
 @api.route('/coffee_machines', methods=['GET'])
 def get_coffee_machines():
@@ -24,11 +22,12 @@ def get_coffee_machines():
         Returns:
             A JSON response containing all coffee machines.
         """
-    db = get_db_session()
-
-    coffee_machines = db.query(CoffeeMachines).all()
-
-    return jsonify({'coffee_machines': [coffee_machines.to_dict() for coffee_machines in coffee_machines]})
+    session = get_db_session()
+    try:
+        coffee_machines = session.query(CoffeeMachines).all()
+        return jsonify({'coffee_machines': [machine.to_dict() for machine in coffee_machines]})
+    finally:
+        session.close()
 
 
 @api.route('/addmachine', methods=['POST'])
@@ -40,10 +39,14 @@ def add_coffee_machine():
             A JSON response confirming successful addition of a coffee machine.
         """
     data = request.get_json()
-    coffee_machine = CoffeeMachines(id=data['id'], model=data['model'], location_id=data['location_id'])
-    db.add(coffee_machine)
-    db.commit()
-    return jsonify({'message': 'Coffee machine added successfully'})
+    session = get_db_session()
+    try:
+        coffee_machine = CoffeeMachines(id=data['id'], model=data['model'], location_id=data['location_id'])
+        session.add(coffee_machine)
+        session.commit()
+        return jsonify({'message': 'Coffee machine added successfully'})
+    finally:
+        session.close()
 
 
 @api.route('/editmachines', methods=['POST'])
@@ -55,20 +58,22 @@ def edit_coffee_machine():
             A JSON response confirming successful update or an error message if any exception occurs.
         """
     data = request.get_json()
+    session = get_db_session()
     try:
-
-        coffee_machine = db.query(CoffeeMachines).get(data['id'])
+        coffee_machine = session.query(CoffeeMachines).get(data['id'])
         if coffee_machine is None:
             return jsonify({'message': 'Coffee machine not found'}), 404
 
         coffee_machine.model = data['model']
         coffee_machine.location_id = data['location_id']
 
-        db.commit()
+        session.commit()
 
         return jsonify({'message': 'Coffee machine updated successfully'})
-    except Exception as e:
+    except Exception:
         return jsonify({'message': 'An error occurred during the update'}), 500
+    finally:
+        session.close()
 
 
 @api.route('/deletemachine/<int:id>', methods=['DELETE'])
@@ -79,10 +84,17 @@ def delete_coffee_machine(id):
         Returns:
             A JSON response confirming successful deletion of the coffee machine.
         """
-    coffee_machine = db.query(CoffeeMachines).get(id)
-    db.delete(coffee_machine)
-    db.commit()
-    return jsonify({'message': 'Coffee machine deleted successfully'})
+    session = get_db_session()
+    try:
+        coffee_machine = session.query(CoffeeMachines).get(id)
+        if coffee_machine is None:
+            return jsonify({'message': 'Coffee machine not found'}), 404
+
+        session.delete(coffee_machine)
+        session.commit()
+        return jsonify({'message': 'Coffee machine deleted successfully'})
+    finally:
+        session.close()
 
 
 @api.route('/profileedit', methods=['POST'])
@@ -95,20 +107,22 @@ def profile_edit():
     """
     data = request.get_json()
     session = get_db_session()
+    try:
+        profile = session.query(Profile).filter(Profile.id == data['id']).first()
 
-    profile = session.query(Profile).filter(Profile.id == data['id']).first()
+        if profile is None:
+            return {'message': 'Profile not found'}, 404
 
-    if profile is None:
-        return {'message': 'Profile not found'}, 404
+        profile.name = data.get('name', profile.name)
+        profile.position = data.get('position', profile.position)
+        profile.description = data.get('description', profile.description)
+        profile.profilePicture = data.get('profilePicture', profile.profilePicture)
 
-    profile.name = data.get('name', profile.name)
-    profile.position = data.get('position', profile.position)
-    profile.description = data.get('description', profile.description)
-    profile.profilePicture = data.get('profilePicture', profile.profilePicture)
+        session.commit()
 
-    session.commit()
-
-    return {'message': 'Profile updated successfully'}, 200
+        return {'message': 'Profile updated successfully'}, 200
+    finally:
+        session.close()
 
 
 @api.route('/profiles/<int:id>', methods=['GET'])
@@ -136,6 +150,8 @@ def get_profile(id):
     except SQLAlchemyError as e:
         app.logger.error(f"Error getting profile: {e}")
         return jsonify({'message': 'There was an error processing your request'}), 500
+    finally:
+        session.close()
 
 
 if __name__ == '__main__':
