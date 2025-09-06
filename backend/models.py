@@ -13,9 +13,8 @@ class Location(Base):
 
     def to_dict(self):
         return {
-            'LocationID': self.LocationID,
-            'Address': self.Address,
-            'CareTakerID': self.CareTakerID
+            'id': self.id,
+            'name': self.name
         }
 
 
@@ -78,9 +77,8 @@ class EmployeeTitle(Base):
 
     def to_dict(self):
         return {
-            'EmployeeID': self.EmployeeID,
-            'FirstName': self.FirstName,
-            'LastName': self.LastName
+            'id': self.id,
+            'title': self.title
         }
 
 
